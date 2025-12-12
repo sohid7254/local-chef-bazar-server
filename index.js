@@ -33,7 +33,7 @@ async function run() {
             const user = req.body;
             user.role = "user";
             user.createdAt = new Date();
-            user.status= "active";
+            user.status = "active";
             const email = user.email;
 
             const userExists = await usersCollection.findOne({ email });
@@ -45,17 +45,20 @@ async function run() {
             res.send(result);
         });
         // role based access
-        app.get("users/:email/role", async(req, res) => {
+        app.get("/users/:email/role", async (req, res) => {
             const email = req.params.email;
-            const query = {email: email}
+            const query = { email: email };
             const user = await usersCollection.findOne(query);
-            res.send({role: user?.role})
-        })
+            res.send({ role: user?.role });
+        });
 
-
-
-
-
+        // showing users on my profile page on frontend
+        app.get("/users/:email", async (req, res) => {
+            const email = req.params.email;
+            const user = await usersCollection.findOne({ email });
+            if (!user) return res.status(404).send({ error: "User not found" });
+            res.send(user);
+        });
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
