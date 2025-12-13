@@ -155,7 +155,8 @@ async function run() {
             }
             return res.send({ success: true, message: "Request processed successfully" });
         });
-        // ---------------Meals---------------
+
+        // ---------------Meals api---------------
 
         app.post("/meals", verifyFBToken, async(req, res) =>{
             try{
@@ -168,7 +169,7 @@ async function run() {
                 if(chef.status === "fraud"){
                     return res.status(403).send({error: "Fraud chefs cannot create meals"})
                 }
-                meal.rating = 0;
+                
                 meal.createdAt = new Date();
 
                 const result = await mealsCollection.insertOne(meal)
@@ -176,6 +177,16 @@ async function run() {
             } catch(error) {
                 res.status(500).send({success: false, error: "Failed to creat meal"})
             }
+        })
+        // get meals by email 
+        app.get("/meals/:email", verifyFBToken, async (req, res) => {
+            const email = req.params.email;
+
+            if(req.decoded_email !== email){
+                return res.status(403).send({error: "Access Denied"})
+            }
+            const meals = await mealsCollection.find({userEmail: email}).sort({createdAt: -1}).toArray()
+            res.send(meals)
         })
 
         // Send a ping to confirm a successful connection
