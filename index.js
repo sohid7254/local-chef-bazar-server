@@ -42,6 +42,11 @@ async function run() {
             const result = await usersCollection.insertOne(user);
             res.send(result);
         });
+        // get all users on frontend
+        app.get("/users", async(req, res) => {
+            const allUsers = await usersCollection.find().sort({createdAt: -1}).toArray();
+            res.send(allUsers)
+        })
         // role based access
         app.get("/users/:email/role", async (req, res) => {
             const email = req.params.email;
@@ -49,6 +54,20 @@ async function run() {
             const user = await usersCollection.findOne(query);
             res.send({ role: user?.role });
         });
+        // updated user status 
+        app.patch("/users/fraud/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await usersCollection.updateOne(
+                {email},
+                {$set: {status: "fraud"}}
+            )
+
+            if(result.modifiedCount > 0){
+                return res.send({success: true})
+            }
+
+            res.send({success: false})
+        })
 
         // showing users on my profile page on frontend
         app.get("/users/:email", async (req, res) => {
