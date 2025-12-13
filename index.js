@@ -1,8 +1,6 @@
 const express = require("express");
 const port = process.env.PORT || 3000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
-
-
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const cors = require("cors");
 const app = express();
@@ -10,7 +8,6 @@ require("dotenv").config();
 // midle ware
 app.use(cors());
 app.use(express.json());
-
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.fdcjmvl.mongodb.net/?appName=Cluster0`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -60,28 +57,55 @@ async function run() {
             if (!user) return res.status(404).send({ error: "User not found" });
             res.send(user);
         });
-        
+
         // ------------------request api------------------
-         app.post("/requests", async (req, res) => {
-             const request = req.body;
-             request.requestStatus = "pending";
-             request.requestTime = new Date();
-             const result = await requestsCollection.insertOne(request);
-             res.send(result);
-         });
+        app.post("/requests", async (req, res) => {
+            const request = req.body;
+            request.requestStatus = "pending";
+            request.requestTime = new Date();
+            const result = await requestsCollection.insertOne(request);
+            res.send(result);
+        });
 
-         app.get("/requests/:email", async (req, res) => {
-             const email = req.params.email;
-             const request = await requestsCollection.findOne({
-                 userEmail: email,
-                 requestStatus: "pending",
-             });
-             res.send(request || {});
-         }),
+        app.get("/requests/:email", async (req, res) => {
+            const email = req.params.email;
+            const request = await requestsCollection.findOne({
+                userEmail: email,
+                requestStatus: "pending",
+            });
+            res.send(request || {});
+        });
 
-         app.get("/requests", async (req, res) => {
-             const requests = await requestsCollection.find().sort({ requestTime: -1 }).toArray();
-             res.send(requests);
+        app.get("/requests", async (req, res) => {
+            const requests = await requestsCollection.find().sort({ requestTime: -1 }).toArray();
+            res.send(requests);
+        });
+
+        app.patch("/requests/update/:id", async (req, res) => {
+            const id = req.params.id;
+            const { requestStatus, userEmail, requestType } = req.body;
+            
+            const requestUpdate = await requestsCollection.updateOne({ _id: id }, { $set: { requestStatus } });
+    
+            if (requestUpdate.modifiedCount === 0) {
+                return res.send({ success: false, message: "Request update failed" });
+            }
+            if (requestStatus === "approved") {
+                let updateData = {};
+                if (requestType === "chef") {
+                    const chefId = "chef-" + Math.floor(1000 + Math.random() * 9000);
+                    updateData = { role: "chef", chefId };
+                }
+                if (requestType === "admin") {
+                    updateData = { role: "admin" };
+                }
+                const userUpdate = await usersCollection.updateOne({ email: userEmail }, { $set: updateData });
+                console.log("User Update:", userUpdate);
+                if (userUpdate.modifiedCount === 0) {
+                    return res.send({ success: false, message: "User role update failed" });
+                }
+            }
+            return res.send({ success: true, message: "Request processed successfully" });
         });
 
         // Send a ping to confirm a successful connection
@@ -93,7 +117,6 @@ async function run() {
     }
 }
 run().catch(console.dir);
-
 
 app.get("/", (req, res) => {
     res.send("Local Chef Bazar is running....");
