@@ -188,6 +188,22 @@ async function run() {
             const meals = await mealsCollection.find({userEmail: email}).sort({createdAt: -1}).toArray()
             res.send(meals)
         })
+        // delete meals
+        app.delete("/meals/:id", verifyFBToken, async(req, res) => {
+            const id = req.params.id;
+            const result = await mealsCollection.deleteOne({_id: new ObjectId(id)})
+            res.send(result)
+        })
+        // update meals information by id
+        app.patch("/meals/:id", verifyFBToken, async(req, res) => {
+            const id = req.params.id;
+            const updatedData = req.body;
+            const result = await mealsCollection.updateOne(
+                {_id: new ObjectId(id)},
+                {$set: updatedData}
+            )
+            res.send({success: result.modifiedCount > 0})
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
