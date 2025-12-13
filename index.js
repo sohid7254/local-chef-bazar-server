@@ -60,6 +60,7 @@ async function run() {
             if (!user) return res.status(404).send({ error: "User not found" });
             res.send(user);
         });
+        
         // ------------------request api------------------
          app.post("/requests", async (req, res) => {
              const request = req.body;
@@ -69,6 +70,19 @@ async function run() {
              res.send(result);
          });
 
+         app.get("/requests/:email", async (req, res) => {
+             const email = req.params.email;
+             const request = await requestsCollection.findOne({
+                 userEmail: email,
+                 requestStatus: "pending",
+             });
+             res.send(request || {});
+         }),
+
+         app.get("/requests", async (req, res) => {
+             const requests = await requestsCollection.find().sort({ requestTime: -1 }).toArray();
+             res.send(requests);
+        });
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
