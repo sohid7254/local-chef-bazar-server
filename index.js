@@ -9,6 +9,31 @@ require("dotenv").config();
 app.use(cors());
 app.use(express.json());
 
+var admin = require("firebase-admin");
+
+var serviceAccount = require(process.env.FIREBASE_ADMIN_SDK_PATH);
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
+
+const verifyFBToken = async(req, res, next) => {
+    const token = req.headers.authorization;
+
+    if(!token){
+        return res.status(401).send({ message: "Unauthorized" });
+    }
+    try {
+        const idToken = token.split(" ")[1];
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        req.decoded_email = decoded.email;
+
+        next()
+    } catch(error) {
+        return res.status(401).send({ message: "Unauthorized access" });
+    }
+}
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.fdcjmvl.mongodb.net/?appName=Cluster0`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -25,6 +50,7 @@ async function run() {
         const db = client.db("local-chef-bazar");
         const usersCollection = db.collection("users");
         const requestsCollection = db.collection("requests");
+        const mealsCollection = db.collection("meals")
 
         // ------------------Users API------------------
         app.post("/users", async (req, res) => {
@@ -70,8 +96,11 @@ async function run() {
         })
 
         // showing users on my profile page on frontend
-        app.get("/users/:email", async (req, res) => {
+        app.get("/users/:email", verifyFBToken, async (req, res) => {
             const email = req.params.email;
+            if(req.decoded_email !== email){
+                return res.status(403).send({error: "Access Denied"})
+            }
             const user = await usersCollection.findOne({ email });
             if (!user) return res.status(404).send({ error: "User not found" });
             res.send(user);
@@ -126,6 +155,28 @@ async function run() {
             }
             return res.send({ success: true, message: "Request processed successfully" });
         });
+        // ---------------Meals---------------
+
+        app.post("/meals", verifyFBToken, async(req, res) =>{
+            try{
+                const meal = req.body;
+
+                if(req.decoded_email !== meal.userEmail){
+                    return res.status(403).send({error: "Access denied"})
+                }
+                const chef = await usersCollection.findOne({email: meal.userEmail});
+                if(chef.status === "fraud"){
+                    return res.status(403).send({error: "Fraud chefs cannot create meals"})
+                }
+                meal.rating = 0;
+                meal.createdAt = new Date();
+
+                const result = await mealsCollection.insertOne(meal)
+                res.send({success: true, result})
+            } catch(error) {
+                res.status(500).send({success: false, error: "Failed to creat meal"})
+            }
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
