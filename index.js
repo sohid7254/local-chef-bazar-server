@@ -27,8 +27,9 @@ async function run() {
 
         const db = client.db("local-chef-bazar");
         const usersCollection = db.collection("users");
+        const requestsCollection = db.collection("requests");
 
-        // users api
+        // ------------------Users API------------------
         app.post("/users", async (req, res) => {
             const user = req.body;
             user.role = "user";
@@ -59,6 +60,15 @@ async function run() {
             if (!user) return res.status(404).send({ error: "User not found" });
             res.send(user);
         });
+        // ------------------request api------------------
+         app.post("/requests", async (req, res) => {
+             const request = req.body;
+             request.requestStatus = "pending";
+             request.requestTime = new Date();
+             const result = await requestsCollection.insertOne(request);
+             res.send(result);
+         });
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
