@@ -178,6 +178,11 @@ async function run() {
                 res.status(500).send({success: false, error: "Failed to creat meal"})
             }
         })
+        // get meals to show on home page
+        app.get("/leatestMeals", async (req, res) => {
+            const meals = await mealsCollection.find().sort({createdAt: -1}).limit(8).toArray();
+            res.send(meals)
+        })
         // get meals by email 
         app.get("/meals/:email", verifyFBToken, async (req, res) => {
             const email = req.params.email;
