@@ -51,6 +51,8 @@ async function run() {
         const usersCollection = db.collection("users");
         const requestsCollection = db.collection("requests");
         const mealsCollection = db.collection("meals")
+        const reviewsCollection = db.collection("reviews")
+        const favouriteCollection = db.collection("favourites")
 
         // ------------------Users API------------------
         app.post("/users", async (req, res) => {
@@ -183,8 +185,18 @@ async function run() {
             const meals = await mealsCollection.find().sort({createdAt: -1}).limit(8).toArray();
             res.send(meals)
         })
+        app.get("/meals", async(req, res) => {
+            const result = await mealsCollection.find().sort({createdAt: -1}).toArray();
+            res.send(result)
+        })
+        // showing meal details on frontend as per id
+        app.get("/meals/:id",async (req, res) => {
+            const id = req.params.id;
+            const result = await mealsCollection.findOne({ _id: new ObjectId(id)});
+            res.send(result)
+        })
         // get meals by email 
-        app.get("/meals/:email", verifyFBToken, async (req, res) => {
+        app.get("/meals/by-email/:email", verifyFBToken, async (req, res) => {
             const email = req.params.email;
 
             if(req.decoded_email !== email){
@@ -209,6 +221,65 @@ async function run() {
             )
             res.send({success: result.modifiedCount > 0})
         })
+        // ---------Reviews api-----------------
+        app.post("/reviews", async (req, res) => {
+            const review = req.body;
+            const exists = await reviewsCollection.findOne({
+                foodId: review.foodId,
+                reviewerEmail: review.reviewerEmail,
+            });
+            if (exists) {
+                return res.send({
+                    success: false,
+                    message: "Already you have added review to this meal",
+                });
+            }
+            const result = await reviewsCollection.insertOne(review);
+            const allReviews = await reviewsCollection.find({ foodId: review.foodId }).toArray();
+            const total = allReviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+            const avgRating = total / allReviews.length;
+            if(!ObjectId.isValid(review.foodId)){
+                return res.status(400).send({success: false, message: "Invalid foodId formate"})
+            }
+            const newFoodId = new ObjectId(review.foodId)
+            await mealsCollection.updateOne({ _id: newFoodId }, { $set: { rating: Number(avgRating.toFixed(2)) } })
+            res.send({
+                success: true,
+                insertedId: result.insertedId,
+            });
+        });
+        app.get("/reviews/:mealId", async (req, res) => {
+            const mealId = req.params.mealId;
+            const reviews = await reviewsCollection.find({ foodId: mealId }).toArray();
+            res.send(reviews);
+        });
+        app.get("/reviews", async(req, res) => {
+            const review = await reviewsCollection.find().sort({date: -1}).limit(10).toArray();
+            res.send(review)
+        })
+
+        // --------fav api ---------
+        app.post("/favorites", async(req, res) => {
+            const favourite = req.body;
+
+            const exists = await favouriteCollection.findOne({
+                userEmail: favourite.userEmail,
+                mealId: favourite.mealId,
+            })
+            if(exists){
+                return res.send({
+                    success: false,
+                    message: "Already added to favorite"
+                })
+            }
+            favourite.addedTime = new Date();
+            const result = await favouriteCollection.insertOne(favourite)
+            res.send({
+                success: true,
+                insertedId: result.insertedIdz,
+            })
+        })
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
