@@ -342,6 +342,16 @@ async function run() {
                 insertedId: result.insertedIdz,
             })
         })
+        app.get("/favorites/:email", verifyFBToken, async(req, res) => {
+            const email = req.params.email;
+            const result = await favouriteCollection.find({userEmail: email}).toArray();
+            res.send(result)
+        })
+        app.delete("/favourites/:id", async(req, res) => {
+            const id = req.params.id;
+            const result = await favouriteCollection.deleteOne({_id: new ObjectId(id)});
+            res.send(result)
+        })
 
 
         // Send a ping to confirm a successful connection
