@@ -119,11 +119,10 @@ async function run() {
 
         app.get("/requests/:email", async (req, res) => {
             const email = req.params.email;
-            const request = await requestsCollection.findOne({
-                userEmail: email,
-                requestStatus: "pending",
-            });
-            res.send(request || {});
+
+            const requests = await requestsCollection.find({ userEmail: email }).sort({ requestTime: -1 }).toArray();
+
+            res.send(requests);
         });
 
         app.get("/requests", async (req, res) => {
@@ -248,18 +247,82 @@ async function run() {
                 insertedId: result.insertedId,
             });
         });
-        app.get("/reviews/:mealId", async (req, res) => {
+        app.get("/reviews/:mealId",verifyFBToken, async (req, res) => {
             const mealId = req.params.mealId;
             const reviews = await reviewsCollection.find({ foodId: mealId }).toArray();
             res.send(reviews);
         });
-        app.get("/reviews", async(req, res) => {
+        app.get("/reviews",verifyFBToken, async(req, res) => {
             const review = await reviewsCollection.find().sort({date: -1}).limit(10).toArray();
             res.send(review)
         })
+        app.get("/reviews/by-email/:email", verifyFBToken, async (req, res) => {
+            const email = req.params.email;
+            if(req.decoded_email !== email){
+                return res.status(403).send({error: "Access Denied"})
+            }
+            const result = await reviewsCollection.find({ reviewerEmail: email }).toArray();
+            res.send(result);
+        });
+        app.delete('/reviews/:id',verifyFBToken, async(req, res) => {
+            const id = req.params.id;
+            const review = await reviewsCollection.findOne({_id: new ObjectId(id)})
+            const deleteResult = await reviewsCollection.deleteOne({_id: new ObjectId(id)})
+            
+            const givenReview = await reviewsCollection.find({foodId: review.foodId}).toArray()
+            let newRating = 0;
+            if(givenReview.length> 0){
+                const total = givenReview.reduce(
+                    (sum, r) => sum + Number(r.rating || 0),0
+                )
+                newRating = Number((total / givenReview.length ).toFixed(3))
+            }
+
+            await mealsCollection.updateOne(
+                {_id: new ObjectId(review.foodId)},
+                {$set: {rating: newRating}}
+            )
+            res.send({
+                success: deleteResult.deletedCount > 0,
+                message: "Review deleted Successfully",
+            })
+        })
+        app.patch("/reviews/:id", verifyFBToken, async (req, res) => {
+            const id = req.params.id;
+            const { rating, comment } = req.body;
+            const review = await reviewsCollection.findOne({ _id: new ObjectId(id) });
+            
+            // Update review
+            const updateReview = await reviewsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        rating: Number(rating),
+                        comment,
+                        date: new Date(),
+                    },
+                }
+            );
+            const allRatings = await reviewsCollection.find({ foodId: review.foodId }).toArray();
+
+            let avgRating = 0;
+
+            if (allRatings.length > 0) {
+                const total = allRatings.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+                avgRating = Number((total / allRatings.length).toFixed(2));
+            }
+
+            await mealsCollection.updateOne({ _id: new ObjectId(review.foodId) }, { $set: { rating: avgRating } });
+
+            res.send({
+                success: true,
+                message: "Review updated successfully",
+            });
+        });
+
 
         // --------fav api ---------
-        app.post("/favorites", async(req, res) => {
+        app.post("/favorites",verifyFBToken, async(req, res) => {
             const favourite = req.body;
 
             const exists = await favouriteCollection.findOne({
