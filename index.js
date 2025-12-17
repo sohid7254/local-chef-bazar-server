@@ -233,8 +233,17 @@ async function run() {
             res.send(meals)
         })
         app.get("/meals", async(req, res) => {
-            const result = await mealsCollection.find().sort({createdAt: -1}).toArray();
-            res.send(result)
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page -1) * limit;
+            const total = await mealsCollection.countDocuments();
+            const meals = await mealsCollection
+                .find()
+                .sort({createdAt: -1})
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+            res.send({total,page,limit,meals})
         })
         // showing meal details on frontend as per id
         app.get("/meals/:id",async (req, res) => {
