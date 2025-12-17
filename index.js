@@ -53,6 +53,7 @@ async function run() {
         const mealsCollection = db.collection("meals")
         const reviewsCollection = db.collection("reviews")
         const favouriteCollection = db.collection("favourites")
+        const ordersCollection = db.collection("orders")
 
         // ------------Reusable api---------
         // admin
@@ -232,6 +233,7 @@ async function run() {
             const meals = await mealsCollection.find().sort({createdAt: -1}).limit(8).toArray();
             res.send(meals)
         })
+        // Show meals Pagination
         app.get("/meals", async(req, res) => {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
@@ -309,7 +311,7 @@ async function run() {
             const reviews = await reviewsCollection.find({ foodId: mealId }).toArray();
             res.send(reviews);
         });
-        app.get("/reviews",verifyFBToken, async(req, res) => {
+        app.get("/reviews", async(req, res) => {
             const review = await reviewsCollection.find().sort({date: -1}).limit(10).toArray();
             res.send(review)
         })
@@ -409,7 +411,21 @@ async function run() {
             const result = await favouriteCollection.deleteOne({_id: new ObjectId(id)});
             res.send(result)
         })
-
+        // -----------------Order api----------------
+        app.post("/orders",verifyFBToken,verifyFraud, async(req, res) => {
+            const order = req.body;
+            order.orderTime = new Date().toISOString();
+            order.orderStatus = "pending",
+            order.paymentStatus = "pending"
+            const result = await ordersCollection.insertOne(order)
+            res.send(result)
+        })
+        // get the order bessed on chefId
+        app.get("/orders/by-chef/:chefId", async (req, res) => {
+            const chefId = req.params.chefId;
+            const orders = await ordersCollection.find({ chefId }).sort({ orderTime: -1 }).toArray();
+            res.send(orders);
+        });
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
