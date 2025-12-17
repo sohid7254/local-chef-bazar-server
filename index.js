@@ -54,6 +54,58 @@ async function run() {
         const reviewsCollection = db.collection("reviews")
         const favouriteCollection = db.collection("favourites")
 
+        // ------------Reusable api---------
+        // admin
+        const verifyAdmin = async(req, res, next) => {
+            try{
+                const email = req.decoded_email;
+                const user = await usersCollection.findOne({email});
+
+                if(!user){
+                    return res.status(404).send({error: "User not Found"})
+                }
+                if(user.role !== "admin"){
+                    return res.status(403).send({error: "Admin Access denied"})
+                }
+                next()
+            } catch(error){
+                res.status(500).send({error: "Admin Verificatin failed"})
+            }
+        }
+        // chef
+        const verifyChef = async(req, res, next) =>{
+            try {
+                const email = req.decoded_email;
+                const user = await usersCollection.findOne({email});
+
+                if(!user){
+                    return res.status(404).send({error: "User not found"})
+                }
+                if(user.role !== "chef"){
+                    return res.status(403).send({error: "Chef access denied"})
+                }
+                next()
+            } catch(error){
+                res.status(500).send({error: "Chef verification failed "})
+            }
+        }
+        // Fraud
+        const verifyFraud = async (req, res, next) =>{
+            try{
+                const email = req.decoded_email;
+                const user = await usersCollection.findOne({email});
+                if(!user){
+                    return res.status(404).send({error: "User not found"})
+                }
+                if(user.status === "fraud"){
+                    return res.status(403).send({error: "Fraud user - action blocked"})
+                }
+                next()
+            } catch(error){
+                res.status(500).send({error: "Fraud verification fraud"})
+            }
+        }
+
         // ------------------Users API------------------
         app.post("/users", async (req, res) => {
             const user = req.body;
@@ -71,7 +123,7 @@ async function run() {
             res.send(result);
         });
         // get all users on frontend
-        app.get("/users", async(req, res) => {
+        app.get("/users",verifyFBToken,verifyAdmin, async(req, res) => {
             const allUsers = await usersCollection.find().sort({createdAt: -1}).toArray();
             res.send(allUsers)
         })
@@ -83,7 +135,7 @@ async function run() {
             res.send({ role: user?.role });
         });
         // updated user status 
-        app.patch("/users/fraud/:email", async (req, res) => {
+        app.patch("/users/fraud/:email",verifyFBToken,verifyAdmin, async (req, res) => {
             const email = req.params.email;
             const result = await usersCollection.updateOne(
                 {email},
@@ -109,7 +161,8 @@ async function run() {
         });
 
         // ------------------request api------------------
-        app.post("/requests", async (req, res) => {
+
+        app.post("/requests",verifyFBToken, async (req, res) => {
             const request = req.body;
             request.requestStatus = "pending";
             request.requestTime = new Date();
@@ -125,12 +178,12 @@ async function run() {
             res.send(requests);
         });
 
-        app.get("/requests", async (req, res) => {
+        app.get("/requests",verifyFBToken,verifyAdmin, async (req, res) => {
             const requests = await requestsCollection.find().sort({ requestTime: -1 }).toArray();
             res.send(requests);
         });
 
-        app.patch("/requests/update/:id", async (req, res) => {
+        app.patch("/requests/update/:id",verifyFBToken,verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const { requestStatus, userEmail, requestType } = req.body;
             
@@ -159,18 +212,13 @@ async function run() {
 
         // ---------------Meals api---------------
 
-        app.post("/meals", verifyFBToken, async(req, res) =>{
+        app.post("/meals", verifyFBToken,verifyFraud,verifyChef, async(req, res) =>{
             try{
                 const meal = req.body;
 
                 if(req.decoded_email !== meal.userEmail){
                     return res.status(403).send({error: "Access denied"})
                 }
-                const chef = await usersCollection.findOne({email: meal.userEmail});
-                if(chef.status === "fraud"){
-                    return res.status(403).send({error: "Fraud chefs cannot create meals"})
-                }
-                
                 meal.createdAt = new Date();
 
                 const result = await mealsCollection.insertOne(meal)
@@ -205,13 +253,13 @@ async function run() {
             res.send(meals)
         })
         // delete meals
-        app.delete("/meals/:id", verifyFBToken, async(req, res) => {
+        app.delete("/meals/:id", verifyFBToken,verifyChef, async(req, res) => {
             const id = req.params.id;
             const result = await mealsCollection.deleteOne({_id: new ObjectId(id)})
             res.send(result)
         })
         // update meals information by id
-        app.patch("/meals/:id", verifyFBToken, async(req, res) => {
+        app.patch("/meals/:id", verifyFBToken,verifyChef, async(req, res) => {
             const id = req.params.id;
             const updatedData = req.body;
             const result = await mealsCollection.updateOne(
@@ -221,7 +269,7 @@ async function run() {
             res.send({success: result.modifiedCount > 0})
         })
         // ---------Reviews api-----------------
-        app.post("/reviews", async (req, res) => {
+        app.post("/reviews",verifyFBToken,verifyFraud, async (req, res) => {
             const review = req.body;
             const exists = await reviewsCollection.findOne({
                 foodId: review.foodId,
@@ -247,7 +295,7 @@ async function run() {
                 insertedId: result.insertedId,
             });
         });
-        app.get("/reviews/:mealId",verifyFBToken, async (req, res) => {
+        app.get("/reviews/:mealId", async (req, res) => {
             const mealId = req.params.mealId;
             const reviews = await reviewsCollection.find({ foodId: mealId }).toArray();
             res.send(reviews);
@@ -322,7 +370,7 @@ async function run() {
 
 
         // --------fav api ---------
-        app.post("/favorites",verifyFBToken, async(req, res) => {
+        app.post("/favorites",verifyFBToken,verifyFraud, async(req, res) => {
             const favourite = req.body;
 
             const exists = await favouriteCollection.findOne({
