@@ -57,6 +57,8 @@ async function run() {
         const favouriteCollection = db.collection("favourites")
         const ordersCollection = db.collection("orders")
         const paymentCollection = db.collection("payments")
+        // off topic
+        const contactCollection = db.collection("contacts")
 
         // ------------Reusable api---------
         // admin
@@ -163,6 +165,10 @@ async function run() {
             if (!user) return res.status(404).send({ error: "User not found" });
             res.send(user);
         });
+        app.get("/admin/stats/totalUsers", async(req, res) => {
+            const count = await usersCollection.countDocuments();
+            res.send({totalUsers: count})
+        })
 
         // ------------------request api------------------
 
@@ -409,7 +415,7 @@ async function run() {
             const result = await favouriteCollection.find({userEmail: email}).toArray();
             res.send(result)
         })
-        app.delete("/favourites/:id", async(req, res) => {
+        app.delete("/favourites/:id",verifyFBToken, async(req, res) => {
             const id = req.params.id;
             const result = await favouriteCollection.deleteOne({_id: new ObjectId(id)});
             res.send(result)
@@ -425,7 +431,7 @@ async function run() {
             res.send(result)
         })
         // get users order
-        app.get("/orders/by-user/:email", async(req, res) => {
+        app.get("/orders/by-user/:email",verifyFBToken, async(req, res) => {
             const email = req.params.email;
             if(email !== req.params.email){
                 return res.status(403).send({message: "Forbidden Access"})
@@ -453,8 +459,16 @@ async function run() {
             )
             res.send({ success: result.modifiedCount > 0})
         })
+        app.get("/admin/stats/ordersPending", async(req, res) => {
+            const count = await ordersCollection.countDocuments({ orderStatus: "pending"})
+            res.send({pendingOrders: count})
+        })
+        app.get("/admin/stats/orderDelivered", async(req, res) => {
+            const count = await ordersCollection.countDocuments({ orderStatus: "delivered"})
+            res.send({deliveredOrders: count})
+        })
         // --------------------Payment api-----------------
-        app.post("/order-payment-checkout", async (req, res) => {
+        app.post("/order-payment-checkout",verifyFBToken, async (req, res) => {
             const info = req.body;
             const amount = parseInt(info.price) * 100;
 
@@ -486,7 +500,7 @@ async function run() {
 
             res.send({ url: session.url });
         });
-        app.patch("/order-payment-success", async(req, res) => {
+        app.patch("/order-payment-success",verifyFBToken, async(req, res) => {
             const sessionId = req.query.session_id;
             const session = await stripe.checkout.sessions.retrieve(sessionId);
             const transactionId = session.payment_intent;
@@ -523,6 +537,14 @@ async function run() {
             }
             res.send({success: false})
         })
+        app.get("/admin/stats/totalPayments", async(req, res) => {
+            const result = await paymentCollection.aggregate([
+                {$group: {_id: null, total:{$sum: "$amount"}}}
+            ]).toArray();
+            res.send({totalPayments: result[0].total || 0})
+        })
+        // --------Contact api----------
+        
 
 
         // Send a ping to confirm a successful connection
