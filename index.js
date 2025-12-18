@@ -257,7 +257,7 @@ async function run() {
             res.send({total,page,limit,meals})
         })
         // showing meal details on frontend as per id
-        app.get("/meals/:id",async (req, res) => {
+        app.get("/meals/:id",verifyFBToken,async (req, res) => {
             const id = req.params.id;
             const result = await mealsCollection.findOne({ _id: new ObjectId(id)});
             res.send(result)
