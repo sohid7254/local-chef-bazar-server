@@ -544,7 +544,15 @@ async function run() {
             res.send({totalPayments: result[0].total || 0})
         })
         // --------Contact api----------
-        
+        app.post("/contact", async(req, res) => {
+            const message = req.body;
+            message.createdAt = new Date();
+            const result = await contactCollection.insertOne(message);
+            if(result.insertedId){
+                return res.send({success: true})
+            }
+            res.send({success: false})
+        })
 
 
         // Send a ping to confirm a successful connection
