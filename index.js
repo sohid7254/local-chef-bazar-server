@@ -418,6 +418,7 @@ async function run() {
         app.post("/orders",verifyFBToken,verifyFraud, async(req, res) => {
             const order = req.body;
             order.orderTime = new Date().toISOString();
+            
             order.orderStatus = "pending",
             order.paymentStatus = "pending"
             const result = await ordersCollection.insertOne(order)
