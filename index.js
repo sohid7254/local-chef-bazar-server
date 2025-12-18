@@ -421,11 +421,24 @@ async function run() {
             res.send(result)
         })
         // get the order bessed on chefId
-        app.get("/orders/by-chef/:chefId", async (req, res) => {
-            const chefId = req.params.chefId;
-            const orders = await ordersCollection.find({ chefId }).sort({ orderTime: -1 }).toArray();
+        app.get("/orders/by-chef/:chefEmail", async (req, res) => {
+            const chefEmail = req.params.chefEmail;
+            const orders = await ordersCollection.find({ chefEmail }).sort({ orderTime: -1 }).toArray();
             res.send(orders);
         });
+        app.patch("/orders/update/:id",verifyFBToken,verifyChef,async(req,res) => {
+            const id = req.params.id;
+            const {status} = req.body;
+            const allowed = ["pending", "accepted","cancelled", "delivered"];
+            if(!allowed.includes(status)) {
+                return res.status(400).send({error: "Invalid status"})
+            }
+            const result = await ordersCollection.updateOne(
+                {_id : new ObjectId(id)},
+                {$set: {orderStatus: status}}
+            )
+            res.send({ success: result.modifiedCount > 0})
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
