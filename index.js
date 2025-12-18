@@ -5,6 +5,8 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
+
+const strip = require("stripe")(process.env.STRIP_SECURE)
 // midle ware
 app.use(cors());
 app.use(express.json());
@@ -54,6 +56,7 @@ async function run() {
         const reviewsCollection = db.collection("reviews")
         const favouriteCollection = db.collection("favourites")
         const ordersCollection = db.collection("orders")
+        const paymentCollection = db.collection("payments")
 
         // ------------Reusable api---------
         // admin
@@ -420,8 +423,18 @@ async function run() {
             const result = await ordersCollection.insertOne(order)
             res.send(result)
         })
+        // get users order
+        app.get("/orders/by-user/:email", async(req, res) => {
+            const email = req.params.email;
+            if(email !== req.params.email){
+                return res.status(403).send({message: "Forbidden Access"})
+            }
+            const query = {userEmail: email}
+            const result = await ordersCollection.find(query).sort({orderTime: -1}).toArray()
+            res.send(result)
+        })
         // get the order bessed on chefId
-        app.get("/orders/by-chef/:chefEmail", async (req, res) => {
+        app.get("/orders/by-chef/:chefEmail",verifyFBToken,verifyChef, async (req, res) => {
             const chefEmail = req.params.chefEmail;
             const orders = await ordersCollection.find({ chefEmail }).sort({ orderTime: -1 }).toArray();
             res.send(orders);
