@@ -6,7 +6,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 
-const strip = require("stripe")(process.env.STRIP_SECURE)
+const stripe = require("stripe")(process.env.STRIP_SECURE)
 // midle ware
 app.use(cors());
 app.use(express.json());
@@ -453,6 +453,77 @@ async function run() {
             )
             res.send({ success: result.modifiedCount > 0})
         })
+        // --------------------Payment api-----------------
+        app.post("/order-payment-checkout", async (req, res) => {
+            const info = req.body;
+            const amount = parseInt(info.price) * 100;
+
+            const session = await stripe.checkout.sessions.create({
+                line_items: [
+                    {
+                        price_data: {
+                            currency: "usd",
+                            unit_amount: amount,
+                            product_data: {
+                                name: `Payment for ${info.mealName}`,
+                            },
+                        },
+                        quantity: info.quantity,
+                    },
+                ],
+                mode: "payment",
+
+                metadata: {
+                    orderId: info.orderId,
+                    mealName: info.mealName,
+                },
+
+                customer_email: info.userEmail,
+
+                success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+            });
+
+            res.send({ url: session.url });
+        });
+        app.patch("/order-payment-success", async(req, res) => {
+            const sessionId = req.query.session_id;
+            const session = await stripe.checkout.sessions.retrieve(sessionId);
+            const transactionId = session.payment_intent;
+            if(session.payment_status === "paid"){
+                const orderId = session.metadata.orderId;
+
+                await ordersCollection.updateOne(
+                    {_id : new ObjectId(orderId)},
+                    {
+                        $set: {
+                            paymentStatus: "paid",
+                            transactionId,
+                            paidAt: new Date(),
+                        },
+                    }
+                )
+                const payment = {
+                    amount: session.amount_total / 100,
+                    currency: session.currency,
+                    userEmail: session.customer_email,
+                    orderId,
+                    mealName: session.metadata.mealName,
+                    transactionId,
+                    paymentStatus: session.payment_status,
+                    paidAt: new Date()
+                }
+
+                await paymentCollection.updateOne(
+                    {transactionId},
+                    {$setOnInsert: payment},
+                    {upsert: true}
+                )
+                return res.send({success: true})
+            }
+            res.send({success: false})
+        })
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
