@@ -132,29 +132,31 @@ app.post("/users", async (req, res) => {
     res.send(result);
 });
 // update user profile
+// ------------------ Update User Profile ------------------
 app.patch("/users/:email", verifyFBToken, async (req, res) => {
-  const email = req.params.email;
-  const updatedData = req.body;
-
-  if (req.decoded_email !== email) {
-    return res.status(403).send({ error: "Access Denied" });
-  }
-
-  try {
-    const result = await usersCollection.updateOne(
-      { email },
-      { $set: updatedData }
-    );
-
-    if (result.modifiedCount > 0) {
-      res.send({ success: true, message: "Profile updated successfully" });
-    } else {
-      res.send({ success: false, message: "No changes applied" });
+    const email = req.params.email;
+    const updatedData = req.body;
+    if (req.decoded_email !== email) {
+        return res.status(403).send({ error: "Access Denied" });
     }
-  } catch (error) {
-    res.status(500).send({ success: false, message: error.message });
-  }
+
+    try {
+        const result = await usersCollection.updateOne(
+            { email },
+            { $set: updatedData }
+        );
+
+        if (result.matchedCount > 0) {
+            const updatedUser = await usersCollection.findOne({ email });
+            res.send({ success: true, message: "Profile updated successfully", data: updatedUser });
+        } else {
+            res.send({ success: false, message: "User not found" });
+        }
+    } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+    }
 });
+
 
 // get all users on frontend
 app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
