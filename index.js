@@ -1,4 +1,6 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -13,8 +15,24 @@ app.use(express.json());
 
 var admin = require("firebase-admin");
 
-const decoded = Buffer.from(process.env.FIREBASE_ADMIN_SDK_PATH, "base64").toString("utf8");
-const serviceAccount = JSON.parse(decoded);
+const getServiceAccount = () => {
+    const localPath = path.join(__dirname, "local-chef-bazar-e4a60-firebase-adminsdk-fbsvc-b647b27705.json");
+
+    try {
+        const encoded = process.env.FIREBASE_ADMIN_SDK_PATH;
+        if (encoded) {
+            const decoded = Buffer.from(encoded, "base64").toString("utf8");
+            return JSON.parse(decoded);
+        }
+    } catch (error) {
+        console.warn("Invalid FIREBASE_ADMIN_SDK_PATH. Falling back to local Firebase credential file.");
+    }
+
+    const raw = fs.readFileSync(localPath, "utf8");
+    return JSON.parse(raw);
+};
+
+const serviceAccount = getServiceAccount();
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -141,10 +159,7 @@ app.patch("/users/:email", verifyFBToken, async (req, res) => {
     }
 
     try {
-        const result = await usersCollection.updateOne(
-            { email },
-            { $set: updatedData }
-        );
+        const result = await usersCollection.updateOne({ email }, { $set: updatedData });
 
         if (result.matchedCount > 0) {
             const updatedUser = await usersCollection.findOne({ email });
@@ -156,7 +171,6 @@ app.patch("/users/:email", verifyFBToken, async (req, res) => {
         res.status(500).send({ success: false, message: error.message });
     }
 });
-
 
 // get all users on frontend
 app.get("/users", verifyFBToken, verifyAdmin, async (req, res) => {
@@ -383,7 +397,7 @@ app.patch("/reviews/:id", verifyFBToken, async (req, res) => {
                 comment,
                 date: new Date(),
             },
-        }
+        },
     );
     const allRatings = await reviewsCollection.find({ foodId: review.foodId }).toArray();
 
@@ -438,7 +452,7 @@ app.post("/orders", verifyFBToken, verifyFraud, async (req, res) => {
     const order = req.body;
     order.orderTime = new Date().toISOString();
 
-    (order.orderStatus = "pending"), (order.paymentStatus = "pending");
+    ((order.orderStatus = "pending"), (order.paymentStatus = "pending"));
     const result = await ordersCollection.insertOne(order);
     res.send(result);
 });
@@ -524,7 +538,7 @@ app.patch("/order-payment-success", verifyFBToken, async (req, res) => {
                     transactionId,
                     paidAt: new Date(),
                 },
-            }
+            },
         );
         const payment = {
             amount: session.amount_total / 100,
